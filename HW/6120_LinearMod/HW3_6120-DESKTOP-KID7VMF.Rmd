@@ -1,0 +1,468 @@
+---
+title: "HW3_6120"
+author: "Jacqui Unciano"
+date: "2023-07-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(leaps)
+library(dplyr)
+library(ggplot2)
+data = read.table("C:\\Users\\Jacqueline\\OneDrive\\Documents\\MSDS\\datasets\\nfl.txt", header = T)
+library(car)
+library(faraway)
+```
+
+## Question 1
+(a) Use the regsubsets() function from the leaps package to run all possible regressions. Set nbest=1. Identify the model (the predictors and the corresponding estimated coefficients) that is best in terms of
+i. Adjusted R2
+ii. Mallow’s Cp
+iii. BIC
+```{r}
+allreg = regsubsets(y~., data=data, nbest=1)
+summary(allreg)
+```
+```{r}
+which.max(summary(allreg)$adjr2)
+which.min(summary(allreg)$cp)
+which.min(summary(allreg)$bic)
+```
+The model chosen by all possible regression that is best in terms of ajdusted R2 is the model with x2, x7, x8, and x9.
+
+The model chosen by all possible regression that is best in terms of Mallow's CP and BIC is the model with x2, x7, and x8.
+
+(b) For the models found in part 1a, use residual plots to assess if the regression assumptions are met, and address if any variables need to be transformed. If needed, transform the appropriate variable, and re-do part 1a using the transformed variables.
+```{r}
+mod1 = lm(y~x2+x7+x8+x9, data=data)
+mod2 = lm(y~x2+x7+x8, data=data)
+par(mfrow=c(2,2))
+plot(mod1)
+plot(mod2)
+```
+Yes, the regression assumptions are met. The data points are distributed evenly over  both the horizontal and vertical band. Meaning the mean error of residuals for each  fitted value is about 0 and the variance is constant as the fitted values increase.
+
+We could argue that the normality assumption is violated because of the QQ plot in  model 2, however, I would say the data is fairly robust and allows for it, especially  since the data isn't going to be perfect anyways.
+
+(c) Run forward selection, starting with an intercept-only model. Report the predictors and the estimated coefficients of the model selected.
+```{r}
+reginter = lm(y~1, data=data)
+regfull = lm(y~., data=data)
+step(reginter, scope=list(lower=reginter, upper=regfull), direction="forward")
+```
+The model selected with forward selection is the model with predictors x2, x7, x8, and x9 as so:
+
+y = -1.821703 + 0.003819x2 + 0.216894x7 - 0.004015x8 - 0.001635x9
+
+(d) Run backward elimination, starting with the model with all predictors. Report the predictors and the estimated coefficients of the model selected.
+```{r}
+step(regfull, scope=list(lower=reginter, upper=regfull), direction="backward")
+```
+The model selected with backward selection is the model with predictors x2, x7,  x8, and x9 as so:
+
+y = -1.821703 + 0.003819x2 + 0.216894x7 - 0.004015x8 - 0.001635x9
+
+(e) The PRESS statistic can be used in model validation as well as a criteria for model selection. Unfortunately, the regsubsets() function from the leaps package does not compute the PRESS statistic. 
+
+Write a function that computes the PRESS statistic for a regression model. Hint: the diagonal elements from the hat matrix can be found using the lm.influence() function.
+```{r}
+press = function(reg){
+  x = reg$residuals/(1-lm.influence(reg)$hat)
+  sum(x^2)
+}
+```
+
+(f) Using the function you wrote in part 1e, calculate the PRESS statistic for your regression model with x2, x7, x8, x9 as predictors. Calculate the R2 Prediction for this model, and compare this value with its R2. What comments can you make about the likely predictive performance of this model?
+```{r}
+1-(press(mod1)/sum(anova(mod1)$"Sum Sq"))
+summary(mod1)
+```
+The R sq Prediction for model 1 (x2, 7, 8, 9) is 0.7318984 and the multiple R sq value  is 0.8012. 
+
+Looking at model 1, the R sq value is much higher than the R sq Prediction, meaning  that model 1 is most likely to overfit the model (which we don't want). 
+
+(g) Create partial regression plots for this model. What are these plots telling us?
+```{r}
+avPlots(mod1)
+```
+The partial regression plots can tell us how the model changes if we were to add the  current predictor (assuming all other predictors are already in the model). So the  slope of each regression line is the coefficient for each variable in the equation  model. It can also suggest predictor variable transformations. For example, if we  thought that x9 was more quadratic, we would need to add that higher order term to  the model and test to see if there was significant change to the model. 
+
+(h) Using externally studentized residuals, do we have any outliers? What teams are these?
+```{r}
+rstudent(mod1)
+```
+
+```{r}
+exsr = rstudent(mod1)
+n = dim(data)[1]
+p = 5
+crit = qt(1-0.05/(2*n), n-1-p)
+crit
+exsr[abs(exsr)>crit]
+```
+There are no detected outliers using the the crit value as a cut off for the  studentized residuals.
+
+(i) Do we have any high leverage data points for this multiple linear regression? What teams are these?
+```{r}
+l = lm.influence(mod1)$hat
+l[l>2*p/n]
+```
+An identified high leverage point is observation (team) 18.
+
+(j) Use DFFITSi, DFBETASj,i, and Cook’s distance to check for influential observations. What teams are influential?
+```{r}
+## DFFITS
+dff = dffits(mod1)
+dff[abs(dff)>2*sqrt(p/n)]
+```
+```{r}
+## DFBETA
+dfb = dfbetas(mod1)
+abs(dfb)>2/sqrt(n)
+```
+```{r}
+## Cooks D
+cd = cooks.distance(mod1)
+cd[cd>qf(0.5,p,n-p)]
+```
+Observation 1 is influential for the associated coefficient for x8 and x9. Observation  4 is influential for the associated coefficient for x2. Observation 10 is influential  for the associated coefficient for x8. Observation 15 is influential for the associated coefficient x9. Observation 21 is influential for the associated coefficient for the  intercept, x7, and x8. This is going off of DFBETA. However, if we look at Cooks D and  DFFITS cutoffs, there are no detected influential observations. 
+
+## Question 2
+```{r}
+Data<-faraway::wcgs
+set.seed(6021) ##for reproducibility to get the same split
+sample<-sample.int(nrow(Data), floor(.50*nrow(Data)), replace = F)
+train<-Data[sample, ] ##training data frame
+test<-Data[-sample, ] ##test data frame
+```
+
+(a) Before fitting a model, create some data visualizations to explore the relationship between these predictors and whether a middle-aged male develops coronary heart disease.
+```{r}
+v1 = ggplot(train)+
+  geom_density(aes(x=age, fill=chd), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+v2 = ggplot(train)+
+  geom_density(aes(x=sdp, fill=chd), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+v3 = ggplot(train)+
+  geom_density(aes(x=dbp, fill=chd), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+v4 = ggplot(train)+
+  geom_density(aes(x=cigs, fill=chd), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+v5 = ggplot(train)+
+  geom_bar(aes(x=dibep, fill=chd),  position = "fill")+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+```
+
+```{r}
+library(gridExtra)
+gridExtra::grid.arrange(v1, v2, v3, v4, v5, ncol = 2, nrow = 3)
+```
+
+(b) Use R to fit the logistic regression model using all the predictors listed above, and write the estimated logistic regression equation.
+```{r}
+mod = glm(chd~age+sdp+dbp+cigs+dibep, data=train, family=binomial)
+summary(mod)
+```
+chd = -8.308765 + 0.060212age + 0.015119sdp + 0.012026dbp + 0.021366cigs - 0.526914dibep, where dibep is 1 if passive behaviour type and 0 if aggressive behaviour type
+
+(c) Interpret the estimated coefficient for cigs in context.
+
+The log-odds of developing coronary heart disease increases by 0.021366 for every  cigarettes smoked per day while keeping all other predictors constant. 
+
+(d) Interpret the estimated coefficient for dibep in context.
+
+The log-odds of developing coronary heart disease decreases by 0.526914 for passive  behaviour type people while keeping all other predictors constant. 
+
+(e) What are the estimated odds of developing heart disease for an adult male who is 45 years old, has a systolic blood pressure of 110 mm Hg, diastolic blood pressure of 70 mm Hg, does not smoke, and has type B personality? What is this person’s corresponding probability of developing heart disease?
+```{r}
+newd = data.frame(age=45, sdp=110, dbp=70, cigs=0, dibep="B")
+exp(predict(mod, newd))
+```
+The estimated odds of this person developing coronary heart disease is 0.02675027.
+
+(f) Carry out the relevant hypothesis test to check if this logistic regression model with five predictors is useful in estimating the odds of heart disease. Clearly state the null and alternative hypotheses, test statistic, and conclusion in context.
+```{r}
+gstat = mod$null.deviance-mod$deviance
+gstat
+qchisq(1-0.05, 5)
+1-pchisq(gstat, 5)
+```
+
+H0: beta(1, 2, 3, 4, 5)==0, the model is not adequate at estimating the odds of  heart disease.
+HA: at least one beta(1,2,3,4,5)=/=0, at least one of the predictors is significant at estimating the odds of heart disease (the model is adequate).
+G-stat: 55.49501, chi-crit: 9.487729, pval: 1.032455e-10 ==> reject the H0
+Conclusion: There is enough evidence to support the full model as at least one of these variables is adequate at estimating the odds of developing heart disease.
+
+(g) Suppose a co-worker of yours suggests fitting a logistic regression model without the two blood pressure variables. Carry out the relevant hypothesis test to check if this model without the blood pressure variables should be chosen over the previous model with all five predictors.
+```{r}
+mod2g = glm(chd~age+cigs+dibep, data=train, family=binomial)
+gstat2 = mod2g$deviance-mod$deviance
+gstat2
+qchisq(1-0.05, 2)
+1-pchisq(gstat2, 2)
+```
+H0: beta(2,3)==0
+HA: at least one=/=0
+G-stat: 13.70587, chi-crit: 3.841459, pval: 0.00105635 ==> reject H0
+Conclusion: There is enough evidence to support the full model and keep the two variables.
+
+(h) Based on the Wald test, is diastolic blood pressure a significant predictor of heart disease, when the other predictors are already in the model?
+
+The wald test suggests that diastolic blood pressure is not a significant predictor of heart disease.
+
+(i) Based on all the analysis performed, which of these predictors would you use in your logistic regression model?
+
+I would keep all of the variables in my model. Maybe I would consider dropping diastolic blood pressure too because it has a really high p value.
+
+(j) Fit a logistic regression model based on your answer in part 2i. Based on the  estimated coefficients of your logistic regression, briefly comment on the relationship between the predictors and the (log) odds of developing heart disease.
+```{r}
+mod3g = glm(chd~age+sdp+cigs+dibep, data=train, family=binomial)
+summary(mod3g)
+```
+For an increase in age, sdp, or cig, the estimated odds of developing heart disease  increases (keeping all other variables constant), but for people with a passive  behaviour type, their estimated odds of developing heart disease decreases (keeping all other variables constant). 
+
+(k) Validate your logistic regression model using an ROC curve. What does your ROC curve tell you?
+```{r}
+library(ROCR)
+p=predict(mod3g, newdata=test, type="response")
+r=ROCR::prediction(p, test$chd)
+roc_result=ROCR::performance(r, measure="tpr", x.measure="fpr")
+plot(roc_result, main="ROC Curve for Reduced Model")
+lines(x = c(0,1), y = c(0,1), col="red")
+```
+Our ROC curve tells us how good our model is at estimating heart disease development.  If our model was really good at correctly predicting heart disease development,  then the curve would be closer to the upper left of the plot. In this case, the ROC curve suggests that our model is better at estimating heart disease development as opposed to just guessing randomly. 
+
+(l) Find the AUC associated with your ROC curve. What does your AUC tell you?
+```{r}
+auc=performance(r, measure = "auc")
+auc@y.values
+```
+The AUC is the area under the ROC curve for our regression model. In this case,  our cutoff was at 0.5 and our AUC is 0.74, indicating that our model does a better job at estimating heart disease development as opposed to just guessing randomly. 
+
+(m) Create a confusion matrix using a cutoff of 0.5. Report the accuracy, true positive rate (TPR), and false positive rate (FPR) at this cutoff.
+```{r}
+table(test$chd, p>0.5)
+n=dim(test)[1]
+1449/n
+```
+
+TPR: 0/128 = 0
+FPR: 0/1449 = 0
+Accuracy: 1449/(1449+128) = 0.9188332
+
+(n) Based on the confusion matrix in part 2m, a classmate says the logistic regression at this cutoff is as good as a “no information classifier”. Do you agree with your classmate’s statement? Briefly explain.
+
+Yes, because this is an unbalanced sample. Meaning at a threshold of 0.5, the model is just guessing at random. But most people (definitely not 50% of the population) don't have heart disease, so we would need to lower the threshold for this to make a little more sense.
+
+(o) Discuss if the threshold should be adjusted. Will it be better to raise or lower the threshold? Briefly explain.
+
+I would suggest lowering the threshold to 0.1 or 0.05 instead of 0.5 in order to get a little more information and to balance things out.
+
+(p) Based on your answer in part 2o, adjust the threshold accordingly, and create the corresponding confusion matrix. Report the accuracy, TPR, and FPR for this threshold.
+```{r}
+table(test$chd, p>0.05)
+n=dim(test)[1]
+```
+
+(q) Comment on the results from the confusions matrices in parts 2m and 2p. What do you think is happening?
+
+TPR and accuracy is sacrificed, but now the FPR 
+
+## Question 3
+```{r}
+library(palmerpenguins)
+Data<-palmerpenguins::penguins
+##remove penguins with gender missing
+Data<-Data[complete.cases(Data[ , 7]),-c(2,8)]
+##80-20 split
+set.seed(1)
+sample<-sample.int(nrow(Data), floor(.80*nrow(Data)), replace = F)
+train<-Data[sample, ]
+test<-Data[-sample, ]
+```
+
+(a) Create some data visualizations to explore the relationship between the various body measurements and the gender of penguins. Be sure to briefly comment on your data visualizations.
+```{r}
+v1 = ggplot(train)+
+  geom_density(aes(x=body_mass_g, fill=sex), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  facet_wrap(~species)+
+  theme_bw()
+v2 = ggplot(train)+
+  geom_density(aes(x=flipper_length_mm, fill=sex), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  facet_wrap(~species)+
+  theme_bw()
+v3 = ggplot(train)+
+  geom_density(aes(x=bill_depth_mm, fill=sex), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  facet_wrap(~species)+
+  theme_bw()
+v4 = ggplot(train)+
+  geom_density(aes(x=bill_length_mm, fill=sex), alpha=0.5)+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  facet_wrap(~species)+
+  theme_bw()
+v5 = ggplot(train)+
+  geom_bar(aes(x=species, fill=sex),  position = "fill")+
+  scale_fill_manual(values=c("#38761d", "#e06666"))+
+  theme_bw()
+```
+
+```{r}
+gridExtra::grid.arrange(v1, v2, ncol = 1)
+gridExtra::grid.arrange(v3, v4, ncol = 1)
+v5
+```
+While controlling for the penguin species, there appears to be a difference in body measurements between the sexes. Males seem to generally have larger/bigger body parts than their female counterparts. The difference between body measurements may or may not be significant though. The proportion of male and female penguins also seem to be balanced within each species. 
+
+(b) Use R to fit the logistic regression model. Based on the results of the Wald tests for the individual coefficients, which predictor(s) appears to be insignificant in the model?
+```{r}
+mod3full = glm(sex~., family="binomial", data=train)
+summary(mod3full)
+```
+Flipper length appears to be insignificant according to the z test.
+
+(c) Based on your answer in part 3b, drop the predictor(s) and refit the logistic regression. Write out the estimated logistic regression equation. If you did not drop any predictor, write out the logistic regression equation from part 3b.
+```{r}
+mod3red = glm(sex~species+bill_length_mm+bill_depth_mm+body_mass_g, family="binomial", data=train)
+summary(mod3red)
+```
+The estimated logistics regression equation is as follows:
+
+sex = -1.032e+02 - 1.042e+01Chin - 1.238e+01Gentoo + 9.513e-01BillLength + 2.099BillDepth + 7.714e-03BodyMass
+
+(d) Based on your estimated logistic regression equation in part 3c, how would you generalize the relationship between some of the body measurement predictors and the (log) odds of a penguin being male?
+
+For Chipstrap or Gentoo penguins, the log odds of them being male decreases, (while holding all other variables constant). For Adelie penguins, or penguins with larger bill lengths, bill depths, or body mass, the log odds of them being male increases (while holding all other variables constant).
+
+(e) Based on your estimated logistic regression equation in part 3c, interpret the estimated coefficient for bill length contextually.
+
+For each mm increase in bill length, the estimated log odds of a penguin being male increases by 0.9513 while holding all other variables constant.
+
+(f) Consider a Gentoo penguin with bill length of 49mm, bill depth of 15mm, flipper length of 220mm, and body mass of 5700g. Based on your estimated logistic regression equation in part 3c, what are the log odds, odds, and probability that this penguin is male?
+```{r}
+new3d = data.frame(species="Gentoo", bill_length_mm=49, bill_depth_mm=15, flipper_length_mm=220, body_mass_g=5700)
+logodds = predict(mod3full, new3d)
+odds = exp(logodds)
+prob = odds/(1+odds)
+logodds
+odds
+prob
+```
+For a Gentoo penguin with these measurements, the log odds of them being male is 6.519, the odds of them being male is 678.399, and the probability of them being male is 0.998.
+
+(g) Conduct a relevant hypothesis test to assess if the logistic regression in part 3c is a useful model. Be sure to write out the null and alternative hypotheses, report the value of the test statistic, and write a relevant conclusion.
+```{r}
+g3g = mod3red$null.deviance-mod3red$deviance
+g3g
+qchisq(1-0.05, 5)
+1-pchisq(g3g, 5)
+```
+H0: beta(1,2,3,4,6)==0 (the model is not useful over an intercept model)
+HA: at least one=/=0 (the model is useful over an intercept model)
+G-stat: 298.4472, chi-crit: 11.0705, p-val: 0 ==> reject the H0
+Conclusion: We have enough evidence that suggests that the current model is useful and should be chosen over an intercept-only model.
+
+(h) Validate your model from part 3c on the test data by creating an ROC curve. What does your ROC curve tell you?
+```{r}
+p3=predict(mod3red, newdata=test, type="response")
+r3=ROCR::prediction(p3, test$sex)
+roc_result=ROCR::performance(r3, measure="tpr", x.measure="fpr")
+plot(roc_result, main="ROC Curve for Reduced Model")
+lines(x = c(0,1), y = c(0,1), col="red")
+```
+Our ROC curve tells us how good our model is at estimating the sex of penguins.  If our model was really good at correctly predicting the sex, then the curve would be closer to the upper left of the plot. In this case, it is considerably close to the upper left corner (noice).
+
+(i) Find the AUC associated with your ROC curve. What does your AUC tell you?
+```{r}
+auc3=ROCR::performance(r3, measure = "auc")
+auc3@y.values
+```
+The AUC is the area under the ROC curve for our regression model. In this case,  our cutoff was at 0.5 and our AUC is 0.9214286, indicating that our model does a better job at predicting penguin sex as opposed to just guessing randomly.
+
+(j) Create a confusion matrix using a threshold of 0.5. What is the false positive rate? What is the false negative rate? What is error rate?
+```{r}
+table(test$sex, p3>0.5)
+n=dim(test)[1]
+n
+```
+FPR: 7/(7+28) = 0.2
+FNR: 4/(28+4) = 0.125
+Error Rate: (7+4)/67 = 0.1641791
+
+(k) Discuss if the threshold should be changed. If it should be changed, explain why, and create another confusion matrix with a different threshold.
+
+No, I don't think we need to change the threshold. Based on the proportion bar chart, the proportion of male and female penguins for each species is around 0.5, so we should have our cut off be around the same. 
+
+## Question 4
+(a) The output below is obtained after using the step() function using forward selection, starting with a model with just the intercept term. What predictors are selected based on forward selection?
+
+The selected predictors are discount, promo, and price. 
+
+(b) Your client asks you to explain what each step in the output shown above means. Explain the forward selection procedure to your client, for this output.
+
+This forward selection uses a measurement called AIC. We want a model with a smaller AIC. A forward selection takes an intercept model (a model with no predictors), and tests the AIC for all possible 1-predictor models. It compares the AIC of these 1-predictor models with the intercept only model and chooses the model with the smallest AIC. In this case, it was the model with the discount predictor. Next, the selection takes that one predictor and tests the remaining predictors one at a time to see which 2-predictor model has the smallest AIC. So in this case, discount+promo had the smallest AIC. This goes on (testing 3-predictors, 4-predictors etc) until the selection can no longer find a model with a smaller AIC than the current model. The selected ended at discount+promo+price because adding time or adding nielsen to the model increased the AIC. 
+
+(c) Your client asks if he should go ahead and use the models selected in part 4a. What advice do you have for your client?
+
+I would advise him to the model as a baseline. Testing for higher order terms and interactions are just as important and should be considered before going ahead and using the current model. 
+
+## Question 5
+(a) Calculate the externally studentized residual, ti, for observation 6. Will this be considered outlying?
+```{r}
+SSres5 = 17*(40.13^2)
+SSres5
+h66 = 0.23960510
+e6 = 120.829070
+t6 = e6*(16/(SSres5*(1-h66)-e6^2))^0.5
+t6
+qt(1-(0.05/38), 16)
+```
+Since the externally studentized residual is greater than the crital value (magnitude wise), observation 6 can be considered an outlier.
+
+(b) What is the leverage for observation 6? Based on the criterion that leverages greater than 2p/n are considered outlying in the predictor(s), is this observation high leverage?
+```{r}
+4/19
+```
+
+The leverage is 0.23960510 which is greater than the cut off of 0.21, indicating that this observation is high in leverage. 
+
+(c) Calculate the DFFITS for observation 6.
+```{r}
+t6*(h66/(1-h66))^0.5
+```
+The DFFITS for obs 6 is 3.440676.
+
+(d) Calculate Cook’s distance for observation 6.
+```{r}
+p1 = e6^2/(2*40.13^2)
+p2 = h66/((1-h66)^2)
+p1*p2
+```
+Cook's D for obs 6 is 1.878418.
+
+(e) Would you say that observation 6 is influential, based on DFFITS and Cook’s distance?
+```{r}
+qf(0.5,2,17)
+2*sqrt(2/19)
+```
+
+By comparing DFFITS and Cook's D for obs 6, where Cook's D of 1.89 is greater than it's cutoff of 0.7221933 and DFFITS of 3.44 is greater than it's cut off of 0.6488857, I would say that obs 6 is influential.
+
+(f) Briefly describe the difference in what DFFITS and Cook’s distance are measuring.
+
+DIFFTS is a measurement between the value of an observation and the predicted value of that observation. So it's focused on how the model differs in terms of that one observation. Cook's Distance takes that to a broader sense where it focuses on how all of the observations are affected if one particular observation is gone. 
+
+TLDR; DFFITS = impact of predicted value for observation i if observation i is removed. Cook's D = impact of all predict3ed values (or coefs) if observation i is removed. 
