@@ -1,0 +1,214 @@
+---
+editor_options:
+  markdown:
+    wrap: 72
+output: pdf_document
+---
+
+# Metadata
+
+    Course:  DS 5100
+    Module:  10 R Programming 1
+    Topic:   HW Computing Payoff for a Quota Structure
+    Author:  R.C. Alvarado (adapted)
+    Date:    7 July (revised)
+
+# Student Info
+
+    Name: Jacqui Unciano
+    Ned ID: jdu5sq
+    URL of this file on GitHub: https://github.com/jacquiunciano/DS5100-jdu5sq/tree/main/lessons/M10/hw10.Rmd
+
+# Instructions
+
+In your **private course repo** use this notebook to write code that
+performs the tasks below.
+
+Save your notebook in the `M10` directory.
+
+Remember to add and commit these files to your repo.
+
+Then push your commits to your repo on GitHib.
+
+Be sure to fill out the **Student Info** block above.
+
+To submit your homework, save your results as a PDF and upload it to
+GradeScope.
+
+**TOTAL POINTS: 12**
+
+------------------------------------------------------------------------
+
+# Overview
+
+A salesperson at a large tech firm is faced with a new payment
+structure.
+
+This salesperson has a quarterly quota of \$225,000.
+
+The payment received follows a progressive schedule with four brackets
+as follows:
+
+1.  For the first 40% of quota, the salesperson receives 7% on quota
+    reached
+2.  For the next 30% of quota, the salesperson receives 10% on quota
+    reached
+3.  For the next 20% of quota, the salesperson receives 13% on quota
+    reached
+4.  For the next 10% of quota, the salesperson receives 16% on quota
+    reached
+
+For example, if the salesperson is 50% to quota, reaching \$112,500 of
+sales, then:
+
+-   `a` = the first 40% is paid out at 7%, thus payout = \$225,000 \*
+    40% \* 7%
+-   `b` = the next 10% is paid out at 10%, thus payout = \$225,000 \*
+    10% \* 10%
+
+The total payout to the salesperson would be `a + b`.
+
+Notice what does *not* happen: getting to the second bracket does NOT
+mean the payout is \$225,000 \* 50% \* 10%.
+
+In another example, a salesperson is at 20% quota. Their payout would be
+\$225,000 \* 20% \* 7%.
+
+This schedule represents earnings up to 100% of quota. We ignore sales
+above 100% here.
+
+**Given this, the salesperson would like to know how much she would earn
+if she reaches a given percentage of quarterly quota.**
+
+Note: The quota structure in this assignment is analogous to how the US
+tax system works: There are several **brackets** with rate $r$ applied
+to dollars in bracket $i$.
+
+------------------------------------------------------------------------
+```{r}
+library(dplyr)
+```
+
+# Task 1
+
+(4 points)
+
+Create a dataframe that encodes the information presented in the
+question. That is, assume that each row of the dataframe stands for a
+bracket, and that the columns stand for the features described in the
+progressive schedule. Then, using the quarterly quota of \$225,000, add
+columns to the dataframe that apply the encoded parameters to this value
+for each bracket. You should end up with columns for the earnings in
+dollars for each bracket, as well as the payout in dollars.
+
+```{r}
+# CODE HERE
+perc_quota = c(0.4,0.3,0.2,0.1)
+perc_received = c(0.07,0.1, 0.13,0.16)
+df = data.frame(perc_quota, perc_received)
+df
+```
+
+```{r}
+df2 = df %>%
+  mutate(payout = c(225000*perc_quota*perc_received)) %>%
+  mutate(earnings = cumsum(payout))
+df2
+```
+
+# Task 2
+
+(4 points)
+
+Write a function that takes an argument for the fraction of quarterly
+quota reached by the salesperson, expressed as a decimal value between
+$0$ and $1$ (e.g. $0.8$ means $80\%$), and which returns the dollar
+amount earned.
+
+```{r}
+# CODE HERE
+earnings = function(frac, quota=225000) {
+  if(frac<df2[1,1]){earnings = quota*(frac*df2[1,2])}
+  else if(between(frac,df2[1,1],0.69)){earnings = quota*(df2[1,1]*df2[1,2]+(frac-df2[1,1])*0.1)} 
+  else if(between(frac,df2[1,1]+df2[2,1],0.89)){earnings = quota*(df2[1,1]*df2[1,2]+df2[2,1]*df2[2,2]+(frac-(df2[1,1]+df2[2,1]))*0.13)}
+  else {earnings = quota*(df2[1,1]*df2[1,2]+0.3*0.1+0.2*0.13+(frac-0.9)*0.16)}
+return(earnings)    
+}
+```
+
+This function should use the previously defined dataframe as a global
+variable. Note that this function is greatly simplified if your first
+dataframe has cumulative sums for the dollar amount columns.
+
+**Do not use for loops in completing this task or the next. Instead, let your
+dataframe do the work.** In your function, match the amount earned to
+the appropriate row in your first dataframe to get the answer.
+
+```{r}
+# TESTING FUNCTION
+earnings(0.45)
+225000*0.4*0.07+225000*0.05*0.1
+earnings(1)
+225000*0.4*0.07+225000*0.3*0.1+225000*0.2*0.13+225000*0.1*0.16
+earnings(0.3)
+225000*0.3*0.07
+earnings(0.66)
+225000*0.4*0.07+225000*0.26*0.1
+```
+```{r}
+earnings(0.8)
+```
+
+# Task 3
+
+(2 points)
+
+Call the function to get the dollar amount earned in increments
+of $10\%$ in a range between $0\%$ to $100\%$ earned. Note that you can
+use `seq()` to generate these increments.
+
+Be sure to put the results of your function at work into a second
+dataframe. That is, create a dataframe with columns for percent of quota
+earned and payout for that amount.
+
+```{r}
+df3 = data.frame(quota_earned=seq(0,1,0.1), quota_payout=sapply(seq(0,1,0.1), earnings))
+df3
+```
+
+# Task 4
+
+(1 point)
+
+Using the first dataframe, plot the amounts earned (y-axis) versus quarterly quota reached (x-axis). 
+
+Display the graph using both points and lines.
+
+Hint: for both axes, use the cumulative sums, which you should have
+defined above.
+
+```{r}
+# CODE HERE
+df2 = df2%>%
+  mutate(cumquota=cumsum(perc_quota))
+df2
+```
+
+```{r}
+plot(df2$cumquota, df2$earnings, type = "b", pch = 19, 
+     col = "#004581", xlab = "Quarterly Quota Reached", ylab = "Earnings")
+```
+
+# Task 5 
+
+(1 point)
+
+Using the second dataframe, plot the dollar amount for each increment (x-axis) versus the payout in dollars (y-axis). 
+
+Again, display the graph using both points and lines.
+
+```{r}
+# CODE HERE
+plot(df3$quota_earned, df3$quota_payout, type = "b", pch = 19, 
+     col = "#004581", xlab = "Percent Increment", ylab = "Total Payout")
+```

@@ -1,0 +1,81 @@
+---
+title: "M10"
+author: "Jacqui Unciano"
+date: "2023-08-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+## exercise 10.1
+f = rep(1,10)
+for (i in 3:10) {
+  f[i] = f[i-2] + f[i-1]
+}
+print(f)
+```
+```{r}
+## exercise 10.2
+fibo = function(flength){
+  f = rep(1,flength)
+  for (i in 3:flength) {
+    f[i] = f[i-2] + f[i-1]
+  }
+  return(f)
+}
+```
+
+```{r}
+fibo(45)
+```
+
+```{r}
+## exercise 10.3
+num1 = function(x){
+  if(between(x,0,1)){1}
+  else {0}
+}
+```
+
+```{r}
+num1(0.1)
+num1(5)
+```
+
+```{r}
+## exercise 10.4
+sapply(seq(0,2,0.3), num1)
+```
+
+```{r}
+## exercise 10.5
+head(letters, 10)
+tail(LETTERS, 10)
+LETTERS[22:24]
+```
+
+```{r}
+## exercise 10.6
+for (i in 1:100){
+  if (i%%3==0 && i%%5==0){print("FizzBuzz")}
+  else if (i%%3==0) {print("Fizz")}
+  else if (i%%5==0) {print("Buzz")}
+  else {print(i)}
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
