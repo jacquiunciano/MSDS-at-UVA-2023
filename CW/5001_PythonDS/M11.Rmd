@@ -79,15 +79,59 @@ tb %>%
   relocate(sex)
 ```
 
+```{r}
+tb %>%
+  filter(sex=="male" & school=="south")
+```
 
+```{r}
+tb %>%
+  filter(math_score>mean(math_score))
+```
 
+```{r}
+tb %>%
+  filter(math_score>=4 & reading_score >=3)
+```
 
+```{r}
+tb %>%
+  filter(math_score<=3 | reading_score <=3)
+```
 
+```{r}
+tb %>%
+  filter(substr(name,1,1)=="m")
+```
 
+```{r}
+tb %>%
+  group_by(teacher) %>%
+  filter(math_score==5)
+```
 
+```{r}
+tb %>%
+  group_by(sex) %>%
+  summarise("mean_score"=mean(math_score)) %>%
+  filter(mean_score==4)
+```
 
+```{r}
+tb = tb %>%
+  mutate(math_score = math_score*10,
+         reading_score = reading_score*10)
+tb
+```
 
+```{r}
+tb %>% 
+  mutate(math_reading_avg = (math_score+reading_score)/2)
+```
 
+```{r}
+
+```
 
 
 
