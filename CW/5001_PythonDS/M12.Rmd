@@ -1,0 +1,99 @@
+---
+title: "M12_exercises"
+author: "Jacqui Unciano"
+date: "2023-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(vctrs)
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+head(mpg)
+```
+
+```{r}
+mpg %>%
+  ggplot()
+```
+
+```{r}
+ggplot(mpg, aes(x=cyl, y=hwy)) +
+  geom_point()
+```
+
+```{r}
+x=seq(-6*pi, 6*pi, length.out = 100)
+df = data.frame(x=x, y=sin(x)/x)
+df
+```
+
+```{r}
+ggplot(df, aes(x=x, y=y)) +
+  geom_line()
+```
+
+```{r}
+ggplot(cars, aes(x=speed, y=dist)) +
+  geom_point()
+```
+
+```{r}
+ggplot(cars, aes(x=speed, y=dist, color=(dist>80))) +
+  geom_point() +
+  scale_color_manual(values=c("#2375b3", "#cc0000"))
+```
+
+```{r}
+ggplot(cars, aes(x=speed, y=dist)) +
+  geom_point(aes(color=(dist>80))) +
+  scale_color_manual(values=c("#2375b3", "#cc0000")) +
+  geom_smooth(method="lm")
+```
+
+```{r}
+ggplot(cars) +
+  geom_histogram(aes(x=speed), fill="#2375b3", alpha=0.5, bins=10) +
+  geom_histogram(aes(x=dist), fill="#cc0000", alpha=0.5, bins=10)
+```
+
+```{r}
+ggplot(mpg) +
+  geom_point(aes(x=hwy, y=cty)) +
+  facet_grid(drv~cyl)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
