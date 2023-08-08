@@ -1,8 +1,28 @@
 class Dice:
+    '''
+    This is a Dice object.
+    '''
+
     df  = pd.DataFrame({"faces":[],
                         "weights":[]}).set_index("faces")
     
     def __init__(self, n, w=1):
+        '''
+        This is a initializer method. It takes a numpy array with the faces of the die (n)
+        and the weight for each face (w) and performs some methods onto the given array with
+        other methods.
+        
+        INPUT:
+        n    numpy array of int or str
+        w    int or numpy array, default 1
+        
+        OUTPUT:
+        NONE
+        
+        Result:
+        Saves your faces and weights as a private dataframe.
+        '''
+        
         if not isinstance(n, np.ndarray):
             raise TypeError("Hey, you need to use an numpy.array!")
         if len(set(n)) != len(n):
@@ -11,6 +31,22 @@ class Dice:
                        "weights":w}).set_index("faces")
         
     def change_weight(self, face, weight):
+        '''
+        This is a change weight method. It takes a the number representing the face of the die that
+        you want to change the weight of (face) and finds the face in the private dataframe. It 
+        updates the dataframe with the new weight for the given face.
+        
+        INPUT:
+        face      int, str
+        weight    int, float
+        
+        OUTPUT:
+        NONE
+        
+        Result:
+        Saves your changes to the dataframe.
+        '''
+        
         if face not in self.df.index:
             raise IndexError("Hey, this face value is not in the current record of faces!")
         if not isinstance(float(weight), float):
@@ -67,16 +103,20 @@ class Analyzer:
     def jackpot(self):
         jackpot_results = self.mygame.df_rolls.iloc[np.where\
         (self.mygame.df_rolls.eq(self.mygame.df_rolls.iloc[:, 0], axis=0).all(1))]
-        return jackpot_results
+        return len(jackpot_results)
     
     def face_counts(self):
         new_df = self.mygame.df_rolls.apply(pd.Series.value_counts, axis=1).fillna(0)
-        new_df = newdf.rename_axis("Face Number", axis="columns")
+        new_df = new_df.rename_axis("Face Number", axis="columns")
         return new_df
     
     def combo_count(self):
-        combo_df = self.mygame.df_rolls.value_counts().to_frame(name="Combo Count")
-        return combo_df
+        return pd.DataFrame(np.sort(self.mygame.df_rolls.values, axis=1), columns=self.mygame.df_rolls.columns) \
+        .value_counts().to_frame(name="Combo Count")
+    
+    def perm_count(self):
+        perm_df = self.mygame.df_rolls.value_counts().to_frame(name="Permutation Count")
+        return perm_df
     
     
     
