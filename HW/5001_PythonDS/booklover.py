@@ -45,7 +45,6 @@ class BookLover:
             return self.num_books
         
     def fav_books(self):
-        filtered = self.book_list\
-        .loc[np.where(self.book_list["book_rating"]>3)]
+        filtered = self.book_list.loc[np.where(self.book_list["book_rating"]>3)]
         return filtered
         
