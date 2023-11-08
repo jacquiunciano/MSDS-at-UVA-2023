@@ -1,0 +1,270 @@
+---
+title: "Homework #4: Risk and Classification" 
+author: "*Jacqui Unciano (jdu5sq)"
+format: ds6030hw-html
+---
+
+::: {style="background-color:yellow; color:red; display: block; border-color: black; padding:1em"}
+This is an **independent assignment**. Do not discuss or work with classmates.
+:::
+
+```{r config, include=FALSE}
+# Set global configurations and settings here
+knitr::opts_chunk$set()                 # set global chunk options
+ggplot2::theme_set(ggplot2::theme_bw()) # set ggplot2 theme
+```
+
+# Required R packages and Directories {.unnumbered .unlisted}
+
+```{r packages, message=FALSE, warning=FALSE}
+dir_data= 'https://mdporter.github.io/DS6030/data/' # data directory
+library(glmnet)    # for glmnet() functions
+library(yardstick) # for evaluation metrics
+library(tidyverse) # functions for data manipulation  
+```
+
+# Crime Linkage
+
+Crime linkage attempts to determine if a set of unsolved crimes share a common offender. *Pairwise* crime linkage is the more simple task of deciding if two crimes share a common offender; it can be considered a binary classification problem. The linkage training data has 8 evidence variables that measure the similarity between a pair of crimes:
+
+-   `spatial` is the spatial distance between the crimes
+-   `temporal` is the fractional time (in days) between the crimes
+-   `tod` and `dow` are the differences in time of day and day of week between the crimes
+-   `LOC`, `POA,` and `MOA` are binary with a 1 corresponding to a match (type of property, point of entry, method of entry)
+-   `TIMERANGE` is the time between the earliest and latest possible times the crime could have occurred (because the victim was away from the house during the crime).
+-   The response variable indicates if the crimes are linked ($y=1$) or unlinked ($y=0$).
+
+These problems use the [linkage-train](https://mdporter.github.io/DS6030/data/linkage_train.csv) and [linkage-test](https://mdporter.github.io/DS6030/data/linkage_test.csv) datasets (click on links for data).
+
+## Load Crime Linkage Data
+
+::: {.callout-note title="Solution"}
+```{r}
+data_train = read_csv("C:/Users/Jacqueline/Downloads/linkage_train.csv")
+data_test = read_csv("C:/Users/Jacqueline/Downloads/linkage_test.csv")
+```
+:::
+
+# Problem 1: Penalized Regression for Crime Linkage
+
+## a. Fit a penalized *linear regression* model to predict linkage.
+
+Use an elastic net penalty (including lasso and ridge) (your choice).
+
+-   Report the value of $\alpha \in [0, 1]$ used
+-   Report the value of $\lambda$ used
+-   Report the estimated coefficients
+
+::: {.callout-note title="Solution"}
+```{r}
+X = glmnet::makeX(select(data_train, -y), data_test)
+X.train = X$x
+X.test = X$xtest
+Y.train = data_train$y
+```
+
+```{r}
+alpha = 0
+enet_lin = cv.glmnet(X.train, Y.train, alpha = alpha)
+lamb_lin = enet_lin$lambda.min
+print(lamb_lin)
+coef(enet_lin, s=lamb_lin)
+```
+
+:::
+
+## b. Fit a penalized *logistic regression* model to predict linkage.
+
+Use an elastic net penalty (including lasso and ridge) (your choice).
+
+-   Report the value of $\alpha \in [0, 1]$ used
+-   Report the value of $\lambda$ used
+-   Report the estimated coefficients
+
+::: {.callout-note title="Solution"}
+```{r}
+enet_log = cv.glmnet(X.train, Y.train, alpha = alpha, family = "binomial")
+lamb_log = enet_log$lambda.min
+print(lamb_log)
+coef(enet_log, s=lamb_log)
+```
+  
+:::
+
+## c. ROC curve: training data
+
+Produce one plot that has the ROC curves, using the *training data*, for both models (from part a and b). Use color and/or linetype to distinguish between models and include a legend.
+
+::: {.callout-note title="Solution"}
+```{r}
+# Load the pROC package
+library(pROC)
+
+# Predict probabilities for both models on the training data
+set.seed(2345)
+pred_lin = predict(enet_lin, newx = X.train, s = lamb_lin, type = "response")
+pred_log = predict(enet_log, newx = X.train, s = lamb_log, type = "response")
+
+# Calculate ROC curves for both models
+roc_lin = roc(Y.train, pred_lin)
+roc_log = roc(Y.train, pred_log)
+
+# Create a plot with ROC curves, color, and a legend
+plot(roc_lin, col = "blue", main = "ROC Curves", print.auc = TRUE, print.auc.x = 0.2, print.auc.y = 0.8)
+lines(roc_log, col = "red")
+legend("bottomright", legend = c("Linear Model", "Logistic Model"), col = c("blue", "red"), lty = 1)
+
+```
+
+:::
+
+## d. ROC curve: resampling estimate
+
+Recreate the ROC curve from the penalized logistic regression model using repeated hold-out data. The following steps will guide you:
+
+-   Fix $\alpha=.75$
+-   Run the following steps 25 times:
+    i.  Hold out 500 observations
+    ii. Use the remaining observations to estimate $\lambda$ using 10-fold CV
+    iii. Predict the probability of linkage for the 500 hold-out observations
+    iv. Store the predictions and hold-out labels
+-   Combine the results and produce the hold-out based ROC curve from all of the hold-out data. I'm looking for a single ROC curve using the predictions for all 12,500 (25 x 500) observations rather than 25 different curves.
+-   Note: by estimating $\lambda$ each iteration, we are incorporating the uncertainty present in estimating that tuning parameter.
+
+::: {.callout-note title="Solution"}
+```{r}
+alpha = 0.75
+nobs = 500
+
+
+labels = c()
+preds = c()
+
+# Repeated hold-out and model fitting
+for (i in 1:25) {
+  samp = sample(1:nrow(data_train), size = nobs)
+  ho_data = data_train[samp, ]
+  train_data = data_train[-samp, ]
+  
+  X = glmnet::makeX(select(train_data, -y), data_test)
+  X.train = X$x
+  X.test = X$xtest
+  Y.train = train_data$y
+  
+  # Estimate lambda using 10-fold cross-validation
+  cvfit = cv.glmnet(X.train, Y.train, 
+                     alpha = alpha, 
+                     family = "binomial",
+                     nfolds = 10)
+  
+  # Fit penalized logistic regression model with estimated lambda
+  mod = glmnet(X.train, Y.train,
+                alpha = alpha,
+                lambda = cvfit$lambda.min,
+                family = "binomial")
+  
+  # Predict probabilities on the hold-out data
+  pred = predict(mod, newx=as.matrix(ho_data[,-9]), type = "response")
+
+  # Store true labels and predictions
+  labels = c(labels, ho_data[,9])
+  preds = c(preds, pred)
+}
+
+# Create a single ROC curve from all hold-out data
+labels = unlist(labels, recursive = FALSE)
+roc_curve = roc(labels, preds)
+
+# Plot the ROC curve
+plot(roc_curve, main = "Repeated Hold-Out ROC Curve", print.auc = TRUE, 
+     col = "blue", print.auc.x = -0.1, print.auc.y = 0.8)
+```
+
+:::
+
+## e. Contest Part 1: Predict the estimated *probability* of linkage.
+
+Predict the estimated *probability* of linkage for the test data (using any model).
+
+-   Submit a .csv file (ensure comma separated format) named `lastname_firstname_1.csv` that includes the column named **p** that is your estimated posterior probability. We will use automated evaluation, so the format must be exact.
+-   You are free to any model (even ones we haven't yet covered in the course).
+-   You are free to use any data transformation or feature engineering.
+-   You will receive credit for a proper submission; the top five scores will receive 2 bonus points.\
+-   Your probabilities will be evaluated with respect to the mean negative Bernoulli log-likelihood (known as the average *log-loss* metric): $$ 
+    L = - \frac{1}{M} \sum_{i=1}^m [y_i \log \, \hat{p}_i + (1 - y_i) \log \, (1 - \hat{p}_i)]
+    $$ where $M$ is the number of test observations, $\hat{p}_i$ is the prediction for the $i$th test observation, and $y_i \in \{0,1\}$ are the true test set labels.
+
+::: {.callout-note title="Solution"}
+```{r}
+logmod = glm(y~., data_train, family="binomial")
+summary(logmod)
+```
+```{r}
+sansMOA = glm(y~spatial+temporal+tod+dow+LOC+POA+TIMERANGE, data_train, family="binomial")
+summary(sansMOA)
+```
+```{r}
+library(car)
+car::avPlots(sansMOA)
+```
+```{r}
+alpha_seq = seq(0,1,0.05)
+
+data_train = data_train %>%
+  select(-MOA)
+data_test = data_test %>% 
+  select(-MOA)
+
+X = glmnet::makeX(select(data_train, -y), data_test)
+X.train = X$x
+X.test = X$xtest
+Y.train = data_train$y
+Y.test = data_test$y
+
+lambs = data.frame(matrix(ncol=2,nrow=0, 
+                            dimnames=list(NULL, c("alpha","lambda"))))
+for (alpha in alpha_seq){
+  lmod = cv.glmnet(X.train, Y.train, alpha = alpha, nfolds=10, family="binomial")
+  lambs = rbind(lambs, list(alpha=alpha, lambda=lmod$lambda.min))
+}
+result = lambs %>%
+  filter(lambda==min(lambda))
+result
+```
+```{r}
+alpha = 1
+finmod = cv.glmnet(X.train, Y.train, alpha = alpha, family="binomial")
+lamb_fin = finmod$lambda.min
+
+p = predict(finmod, newx = X.test, s = lamb_fin, type = "response")
+```
+
+```{r}
+colnames(p) = c("p")
+```
+
+```{r}
+#-- Submit
+# write_csv(as.data.frame(p), "C:/Users/Jacqueline/Downloads/unciano_jacqueline_1.csv")
+```
+:::
+
+## f. Contest Part 2: Predict the *linkage label*.
+
+Predict the linkages for the test data (using any model).
+
+-   Submit a .csv file (ensure comma separated format) named `lastname_firstname_2.csv` that includes the column named **linkage** that takes the value of 1 for linked pairs and 0 for unlinked pairs. We will use automated evaluation, so the format must be exact.
+-   You are free to any model (even ones we haven't yet covered in the course).
+-   You are free to use any data transformation or feature engineering.
+-   Your labels will be evaluated based on total cost, where cost is equal to `1*FP + 8*FN`. This implies that False Negatives (FN) are 8 times as costly as False Positives (FP).\
+-   You will receive credit for a proper submission; the top five scores will receive 2 bonus points. Note: you only will get bonus credit for one of the two contests.
+
+::: {.callout-note title="Solution"}
+```{r}
+cutoff = 0.1 
+linkage = ifelse(p >= cutoff, 1, 0)
+
+# write_csv(as.data.frame(linkage), "C:/Users/Jacqueline/Downloads/unciano_jacqueline_2.csv")
+```
+
+:::

@@ -1,0 +1,402 @@
+---
+title: "Homework #1: Supervised Learning"
+author: "**Your Name Here**"
+format: ds6030hw-html
+---
+
+```{r config, include=FALSE}
+# Set global configurations and settings here
+knitr::opts_chunk$set()                 # set global chunk options
+ggplot2::theme_set(ggplot2::theme_bw()) # set ggplot2 theme
+```
+
+# Required R packages and Directories
+
+```{r packages, message=FALSE, warning=FALSE}
+data.dir = 'https://mdporter.github.io/SYS6030/data/' # data directory
+library(tidyverse) # functions for data manipulation
+library(ggplot2)
+```
+
+# Problem 1: Evaluating a Regression Model
+
+## a. Data generating functions
+
+Create a set of functions to generate data from the following distributions:
+
+```{=tex}
+\begin{align*}
+X &\sim \mathcal{N}(0, 1) \\
+Y &= -1 + .5X + .2X^2 + \epsilon \\
+\epsilon &\sim \mathcal{N}(0,\, \sigma)
+\end{align*}
+```
+::: {.callout-note title="Solution"}
+```{r}
+## normal dist
+x_vals = function(n){ 
+  rnorm(n) 
+}
+## function equation
+func = function(x){
+  -1+(0.5*x)+(0.2*x^2)
+}
+## y dist
+y_vals = function(x, sd=1){
+  n = length(x)
+  func(x)+rnorm(n, sd=sd)
+}
+```
+:::
+
+## b. Generate training data
+
+Simulate $n=100$ realizations from these distributions using $\sigma=3$. Produce a scatterplot and draw the true regression line $f(x) = E[Y \mid X=x]$. - Use `set.seed(611)` prior to generating the data.
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(611)
+n=100
+sd=3
+x = x_vals(n)
+y = y_vals(x, sd)
+tib = tibble(x=x, y=y)
+ggplot(data=tib)+
+  geom_point(aes(x=x, y=y))+
+  geom_function(fun = func, color="darkblue")+
+  theme_bw()
+```
+:::
+
+## c. Fit three models
+
+Fit three polynomial regression models using least squares: linear, quadratic, and cubic. Produce another scatterplot, add the fitted lines and true population line $f(x)$ using different colors, and add a legend that maps the line color to a model.
+
+-   Note: The true model is quadratic, but we are also fitting linear (less complex) and cubic (more complex) models.
+
+::: {.callout-note title="Solution"}
+```{r}
+dg = tibble(x=seq(-3,3,length=100))
+```
+
+```{r}
+lin = lm(y~x, data=tib)
+l = predict(lin, dg)
+cub = lm(y~poly(x, degree=3), data=tib)
+c = predict(cub, dg)
+```
+
+```{r}
+preds = dg %>%
+  mutate(linear=l, cubic=c) %>%
+  pivot_longer(cols=c(linear, cubic), names_to = "model", values_to = ".pred")
+```
+
+```{r}
+ggplot(tib)+
+  geom_point(aes(x=x, y=y))+
+  geom_function(fun=func, aes(color="quadratic"))+
+  geom_line(data=preds, aes(x=x, y=.pred, color=model))+
+  labs(color="Regression Model")
+```
+:::
+
+## d. Predictive performance
+
+Generate a *test data* set of 10,000 observations from the same distributions. Use `set.seed(612)` prior to generating the test data.
+
+-   Calculate the estimated mean squared error (MSE) for each model.
+-   Are the results as expected?
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(612)
+n=10000
+sd=3
+x = x_vals(n)
+y = y_vals(x, sd)
+test = tibble(x=x, y=y)
+```
+
+```{r}
+poly_eval <- function(deg, data_train, data_test){
+  if(deg==0) m = lm(y~1, data=data_train) # intercept only model
+  else m = lm(y~poly(x, degree=deg), data=data_train) # polynomial
+  p = length(coef(m)) # number of parameters
+  mse.train = mean(m$residuals^2) # training MSE
+  yhat = predict(m, data_test) # predictions at test X's
+  mse.test = mean( (data_test$y - yhat)^2 )# test MSE
+  tibble(degree=deg, edf=p, mse.train, mse.test)
+}
+```
+
+```{r}
+deg_seq = c(1,2,3)
+perf_poly = map_df(deg_seq, ~poly_eval(., data_train=tib, data_test=test))
+```
+
+```{r}
+perf_poly %>%
+  pivot_longer(starts_with("mse"), names_to="data", values_to="mse") %>% 
+  mutate(data = str_remove(data, "mse\\.")) %>% 
+  ggplot(aes(edf, mse, color=data))+ 
+  geom_line()+
+  geom_point()+
+  labs(title="Polynomial Regression", 
+       x = 'edf (degree + 1)', 
+       y="MSE",
+       color="Data")+
+  theme_bw()
+```
+
+```{r}
+perf_poly
+```
+
+The results were surprising because according to the MSE for the test data, the model with the lowest MSE is the linear model, not the 'true' model (quadratic model).
+:::
+
+## e. Optimal performance
+
+What is the best achievable MSE? That is, what is the MSE if the true $f(x)$ was used to evaluate the test set? How close does the best method come to achieving the optimum?
+
+::: {.callout-note title="Solution"}
+The standard deviation is 3, so the variance is 9. Therefore, the optimum MSE is 9 as well. With the true function (quadratic function with edf of 3), the MSE for the test data is around 9.58, which is considerably close to the optimum MSE.
+:::
+
+## f. Replication
+
+The MSE scores obtained in part *d* came from one realization of training data. Here will we explore how much variation there is in the MSE scores by replicating the simulation many times.
+
+-   Re-run parts b. and c. (i.e., generate training data and fit models) 100 times.
+    -   Do not generate new testing data
+    -   Use `set.seed(613)` prior to running the simulation and do not set the seed in any other places.
+-   Calculate the test MSE for all simulations.
+    -   Use the same test data from part d. (This question is only about the variability that comes from the *training data*).
+-   Create kernel density or histogram plots of the resulting MSE values for each model.
+
+::: {.callout-note title="Solution"}
+```{r}
+## part b
+set.seed(613)
+rep_train = function(reps){
+  train = list()
+  for (i in 1:reps){
+    n=100
+    sd=3
+    x = x_vals(n)
+    y = y_vals(x, sd)
+    train = append(train, list(tibble(x=x, y=y)))
+  }
+  train
+}
+```
+
+```{r}
+rep.train = rep_train(100)
+```
+
+```{r}
+## part c
+rep_lin = function(mylist){
+  all_preds = list()
+  for (i in mylist){
+    dg = tibble(x=seq(-3,3,length=100))
+    lin = lm(i$y~i$x, data=i)
+    l = predict(lin, dg)
+    cub = lm(y~poly(x, degree=3), data=i)
+    c = predict(cub, dg)
+    preds = dg %>%
+      mutate(linear=l, cubic=c) %>%
+      pivot_longer(cols=c(linear, cubic), names_to = "model", values_to = ".pred")
+    all_preds = append(all_preds, list(preds))
+  }
+  all_preds
+}
+```
+
+```{r}
+rep.lin = rep_lin(rep.train)
+```
+
+```{r}
+poly100 = function(training){
+  deg_seq = c(1,2,3)
+  poly_list = list()
+  for (i in training){
+    perf_poly = map_df(deg_seq, ~poly_eval(., data_train=i, data_test=test)) %>%
+      pivot_longer(starts_with("mse"), names_to="data", values_to="mse") %>% 
+      mutate(data = str_remove(data, "mse\\."))
+    poly_list = append(poly_list, list(perf_poly))
+  }
+  poly_list
+}
+```
+
+```{r}
+polydf = poly100(rep.train)
+```
+
+```{r}
+new_polydf = bind_rows(polydf, .id="n rep") %>% 
+  filter(data=='train')
+```
+
+```{r}
+new_polydf$degree = as.factor(new_polydf$degree)
+```
+
+```{r}
+ggplot(data=new_polydf)+
+  geom_density(aes(x=mse, fill=degree),
+               alpha=0.25)+
+  #facet_wrap(~degree, ncol=1)+
+  labs(title="Polynomial Regression: Train",
+       x = 'MSE', 
+       y="freq",
+       fill="degree")+
+  theme_bw()
+```
+
+```{r}
+new_polydf2 = bind_rows(polydf, .id="n_rep") %>% 
+  filter(data=='test')
+```
+
+```{r}
+new_polydf2$degree = as.factor(new_polydf$degree)
+```
+
+```{r}
+ggplot(data=new_polydf2)+
+  geom_density(aes(x=mse, fill=degree),
+               alpha=0.25)+
+  #facet_wrap(~degree, ncol=1)+
+  labs(title="Polynomial Regression: Test",
+       x = 'MSE', 
+       y="freq",
+       fill="degree")+
+  theme_bw()
+```
+:::
+
+## g. Best model
+
+Show a count of how many times each model was the best. That is, out of the 100 simulations, count how many times each model had the lowest MSE.
+
+::: {.callout-note title="Solution"}
+```{r}
+lowestMSE = new_polydf2 %>%
+  group_by(n_rep) %>%
+  filter(mse==min(mse)) %>%
+  group_by(degree) %>%
+  summarise("count"=n())
+lowestMSE
+```
+:::
+
+## h. Function to implement simulation
+
+Write a function that implements the simulation in part *f*. The function should have arguments for i) the size of the training data $n$, ii) the standard deviation of the random error $\sigma$, and iii) the test data. Use the same `set.seed(613)`.
+
+::: {.callout-note title="Solution"}
+```{r}
+train_sim = function(n, sigma, test_data, reps=100, seed=613){
+  if(!is.null(seed)) set.seed(seed)
+  train = list()
+  for (i in 1:reps){
+    n=n
+    sd=sigma
+    x = x_vals(n)
+    y = y_vals(x, sd)
+    train = append(train, list(tibble(x=x, y=y)))
+  }
+
+  deg_seq = c(1,2,3)
+  poly_list = list()
+  for (i in train){
+    perf_poly = map_df(deg_seq, ~poly_eval(., data_train=i, data_test=test)) %>%
+      pivot_longer(starts_with("mse"), names_to="data", values_to="mse") %>% 
+      mutate(data = str_remove(data, "mse\\."))
+    poly_list = append(poly_list, list(perf_poly))
+  }
+  
+  polydf = bind_rows(poly_list, .id="n_rep") %>% 
+  filter(data=='test')
+  polydf$degree = as.factor(polydf$degree)
+  polydf
+}
+```
+:::
+
+## i. Performance when $\sigma=2$
+
+Use your function to repeat the simulation in part *f*, but use $\sigma=2$. Report the number of times each model was best (you do not need to produce any plots).
+
+-   First generate new test data with ($n = 10000$, $\sigma = 2$, using `seed = 612`).
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(612)
+x = x_vals(10000)
+y = y_vals(x, 2)
+test = tibble(x=x, y=y)
+```
+
+```{r}
+n=100
+sd=2
+newsim = train_sim(n=n, sigma=sd, test_data=test, seed=613)
+newsim
+```
+
+```{r}
+lowestMSE = newsim %>%
+  group_by(n_rep) %>%
+  filter(mse==min(mse)) %>%
+  group_by(degree) %>%
+  summarise("count"=n())
+lowestMSE
+```
+:::
+
+## j. Performance when $\sigma=4$ and $n=300$
+
+Repeat *i*, but now use $\sigma=4$ and $n=300$.
+
+-   First generate new test data with ($n = 10000$, $\sigma = 4$, using `seed = 612`).
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(612)
+x = x_vals(10000)
+y = y_vals(x, 4)
+test = tibble(x=x, y=y)
+```
+
+```{r}
+n = 300
+sd = 4
+newsim = train_sim(n=n, sigma=sd, test_dat=test)
+newsim
+```
+
+```{r}
+lowestMSE = newsim %>%
+  group_by(n_rep) %>%
+  filter(mse==min(mse)) %>%
+  group_by(degree) %>%
+  summarise("count"=n())
+lowestMSE
+```
+:::
+
+## k. Understanding
+
+Describe the effects $\sigma$ and $n$ has on selection of the best model? Why is the *true* model form (i.e., quadratic) not always the *best* model to use when prediction is the goal?
+
+::: {.callout-note title="Solution"}
+I personally don't see that much of a difference between the models when changing the size or standard deviation. I noticed that regardless of the size or the standard deviation, the true model has more instances of having the lowest MSE compared to the two other models.
+
+If the true model is used for prediction, there's a possibility that the model would overfit the data when applied to larger testing models. Therefore, the prediction power of the model would decrease due to the model fitting too well to the training data.
+:::

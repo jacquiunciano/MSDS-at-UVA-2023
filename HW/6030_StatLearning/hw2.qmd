@@ -1,0 +1,367 @@
+---
+title: "Homework #2: Resampling" 
+author: "Jacqui Unciano"
+format: ds6030hw-html
+---
+
+# Required R packages and Directories {.unnumbered .unlisted}
+
+```{r packages, message=FALSE, warning=FALSE}
+data.dir = 'https://mdporter.github.io/DS6030/data/' # data directory
+library(tidymodels)# for optional tidymodels solutions
+library(tidyverse) # functions for data manipulation  
+library(FNN)
+```
+
+# Problem 1: Bootstrapping
+
+Bootstrap resampling can be used to quantify the uncertainty in a fitted curve.
+
+## a. Data Generating Process
+
+Create a set of functions to generate data from the following distributions: \begin{align*}
+X &\sim \mathcal{U}(0, 2) \qquad \text{Uniform in $[0,2]$}\\
+Y &= 1 + 2x + 5\sin(5x) + \epsilon \\
+\epsilon &\sim \mathcal{N}(0,\, \sigma=2.5)
+\end{align*}
+
+::: {.callout-note title="Solution"}
+```{r}
+## uniform dist
+x_vals = function(n){ 
+  runif(n, min=0, max=2) 
+}
+## function equation
+func = function(x){
+  1+(2*x)+(5*sin(5*x))
+}
+## y dist
+y_vals = function(x, sd=2.5){
+  n = length(x)
+  func(x)+rnorm(n, sd=sd)
+}
+```
+:::
+
+## b. Simulate data
+
+Simulate $n=100$ realizations from these distributions. Produce a scatterplot and draw the true regression line $f(x) = E[Y \mid X=x]$. Use `set.seed(211)` prior to generating the data.
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(211)
+n=100
+x = x_vals(n)
+y = y_vals(x)
+data_train= tibble(x=x, y=y)
+ggplot(data=data_train)+
+  geom_point(aes(x=x, y=y))+
+  geom_function(fun = func, color="darkblue")+
+  theme_bw()
+```
+:::
+
+## c. 5th degree polynomial fit
+
+Fit a 5th degree polynomial. Produce a scatterplot and draw the *estimated* regression curve.
+
+::: {.callout-note title="Solution"}
+```{r}
+dg = tibble(x=seq(0,2,length=100))
+```
+
+```{r}
+fifth = lm(y~poly(x, degree=5), data=data_train)
+f = predict(fifth, dg)
+```
+
+```{r}
+preds = dg %>%
+  mutate(fifth=f)
+```
+
+```{r}
+ggplot(data_train)+
+  geom_point(aes(x=x, y=y))+
+  geom_line(data=preds, aes(x=x, y=fifth),
+            color="darkblue")+
+  theme_bw()
+```
+:::
+
+## d. Bootstrap sampling
+
+Make 200 bootstrap samples. For each bootstrap sample, fit a 5th degree polynomial and make predictions at `eval_pts = seq(0, 2, length=100)`
+
+-   Set the seed (use `set.seed(212)`) so your results are reproducible.
+-   Produce a scatterplot with the original data and add the 200 bootstrap curves
+
+::: {.callout-note title="Solution"}
+```{r}
+M = 200 # number of bootstrap samples
+data_eval = tibble(x=seq(0, 2, length=100)) # evaluation points
+YHAT = matrix(NA, nrow(data_eval),M) # initialize matrix for fitted values
+set.seed(212)
+for(m in 1:M){
+  # sample indices/rows from empirical distribution (with replacement)
+  ind = sample(100, replace=TRUE)
+  m_boot = lm(y~poly(x, degree=5), data = data_train[ind,])
+  # predict from bootstrap model
+  YHAT[,m] = predict(m_boot, data_eval)
+}
+```
+
+```{r}
+#: Convert to tibble and plot
+data_fit = as_tibble(YHAT) %>% # convert matrix to tibble
+  bind_cols(data_eval) %>% # add the eval points
+  pivot_longer(-x, names_to="simulation", values_to="y") # convert to long format
+```
+
+```{r}
+ggplot(data_train, aes(x,y))+
+  geom_line(data=data_fit, color="darkblue", alpha=.1, aes(group=simulation))+
+  geom_point()+
+  theme_bw()
+```
+:::
+
+## e. Confidence Intervals
+
+Calculate the pointwise 95% confidence intervals from the bootstrap samples. That is, for each $x \in {\rm eval\_pts}$, calculate the upper and lower limits such that only 5% of the curves fall outside the interval at $x$.
+
+-   Remake the plot from part *c*, but add the upper and lower boundaries from the 95% confidence intervals.
+
+::: {.callout-note title="Solution"}
+```{r}
+lb = apply(YHAT, 1, function(row) quantile(row, 0.025))
+ub = apply(YHAT, 1, function(row) quantile(row, 0.975))
+ci = tibble(x=data_eval, lower=lb, upper=ub)
+```
+
+```{r}
+ggplot()+
+  geom_point(data=data_train, aes(x=x, y=y))+
+  geom_line(data=preds, aes(x=x, y=fifth),
+            color="darkblue")+
+  labs(color="")+
+  guides(color=guide_legend(title="Regression Models"))+
+  geom_ribbon(data=ci, aes(x=x$x, ymin=lower, ymax=upper),
+              fill="darkblue",
+              alpha=0.1)+
+  theme_bw()
+```
+:::
+
+# Problem 2: V-Fold cross-validation with $k$ nearest neighbors
+
+Run 10-fold cross-validation on the data generated in part 1b to select the optimal $k$ in a k-nearest neighbor (kNN) model. Then evaluate how well cross-validation performed by evaluating the performance on a large test set. The steps below will guide you.
+
+## a. Implement 10-fold cross-validation
+
+Use $10$-fold cross-validation to find the value of $k$ (i.e., neighborhood size) that provides the smallest cross-validated MSE using a kNN model.
+
+-   Search over $k=3,4,\ldots, 40$.
+-   Use `set.seed(221)` prior to generating the folds to ensure the results are replicable.
+-   Show the following:
+    -   the optimal $k$ (as determined by cross-validation)
+    -   the corresponding estimated MSE
+    -   produce a plot with $k$ on the x-axis and the estimated MSE on the y-axis (optional: add 1-standard error bars).
+-   Notation: The $k$ is the tuning paramter for the kNN model. The $v=10$ is the number of folds in V-fold cross-validation. Don't get yourself confused.
+
+::: {.callout-note title="Solution"}
+```{r}
+#: Function to evaluate kNN
+knn_eval = function(k, data_train, data_test){
+  # fit model and eval on training data
+  knn = knn.reg(data_train[,'x', drop=FALSE],
+  y = data_train$y,
+  test = data_train[,'x', drop=FALSE],
+  k = k)
+  r = data_train$y-knn$pred # residuals on training data
+  mse.train = mean(r^2) # training MSE
+  # fit model and eval on test data
+  knn.test = knn.reg(data_train[,'x', drop=FALSE],
+                     y = data_train$y,
+                     test=data_test[,'x', drop=FALSE],
+                     k=k)
+  r.test = data_test$y-knn.test$pred # residuals on test data
+  mse.test = mean(r.test^2) # test MSE
+  # results
+  edf = nrow(data_train)/k # effective dof (edof)
+  tibble(k=k, edf=edf, mse.train, mse.test)
+}
+```
+
+```{r}
+#- Get K-fold partition
+n.folds = 10 # number of folds for cross-validation
+n=100
+k = seq(3,40,1)
+set.seed(221) # set seed for reproducibility
+fold = sample(rep(1:n.folds, length=n)) # vector of fold labels
+# notice how this is different than: sample(1:K,n,replace=TRUE),
+# which won't necessarily give almost equal group sizes
+results = vector("list", n.folds)
+#- Iterate over folds
+for(j in 1:n.folds){
+  #-- Set training/val data
+  val = which(fold == j) # indices of holdout/validation data
+  train = which(fold != j) # indices of fitting/training data
+  n.val = length(val) # number of observations in validation
+
+    #- fit and evaluate models
+  results[[j]] = map_df(k, 
+                        knn_eval, 
+                        data_train = slice(data_train, train),
+                        data_test = slice(data_train, val)) %>%
+    mutate(fold = j, n.val) # add fold number and number in validation)
+}
+
+RESULTS = bind_rows(results)
+```
+
+```{r}
+RESULTS %>% 
+  mutate(fold = factor(fold)) %>%
+  ggplot(aes(k, mse.test)) +
+  geom_line(aes(color=fold)) +
+  geom_point(data=. %>% group_by(fold) %>% slice_min(mse.test, n=1), color="blue") +
+  geom_line(data = . %>% group_by(k) %>% summarize(mse.test = mean(mse.test)), linewidth=2) +
+  geom_point(data = . %>% group_by(k) %>% summarize(mse.test = mean(mse.test)) %>%
+               slice_min(mse.test, n=1), size=3, color="red") +
+  scale_x_continuous(breaks = seq(0, 40, by=2)) +
+  theme_bw()
+```
+:::
+
+## b. Find the optimal *edf*
+
+The $k$ (number of neighbors) in a kNN model determines the effective degrees of freedom *edf*. What is the optimal *edf*? Be sure to use the correct sample size when making this calculation. Produce a plot similar to that from part *a*, but use *edf* (effective degrees of freedom) on the x-axis.
+
+::: {.callout-note title="Solution"}
+```{r}
+RESULTS %>% 
+  mutate(fold = factor(fold)) %>%
+  ggplot(aes(edf, mse.test)) +
+  geom_line(aes(color=fold)) +
+  geom_point(data=. %>% group_by(fold) %>% slice_min(mse.test, n=1), color="blue") +
+  geom_line(data = . %>% group_by(edf) %>% summarize(mse.test = mean(mse.test)), linewidth=2) +
+  geom_point(data = . %>% group_by(edf) %>% summarize(mse.test = mean(mse.test)) %>%
+               slice_min(mse.test, n=1), size=3, color="red") +
+  scale_x_continuous(breaks = seq(0, 40, by=2)) +
+  theme_bw()
+```
+:::
+
+## c. Choose $k$
+
+After running cross-validation, a final model fit from *all* of the training data needs to be produced to make predictions. What value of $k$ would you choose? Why?
+
+::: {.callout-note title="Solution"}
+```{r}
+RESULTS %>% 
+  mutate(fold = factor(fold)) %>%
+  ggplot(aes(k, mse.test)) +
+  geom_line(aes(color=fold)) +
+  geom_point(data=. %>% group_by(fold) %>% slice_min(mse.test, n=1), color="blue") +
+  geom_line(data = . %>% group_by(k) %>% summarize(mse.test = mean(mse.test)), linewidth=2) +
+  geom_point(data = . %>% group_by(k) %>% summarize(mse.test = mean(mse.test)) %>%
+               slice_min(mse.test, n=1), size=3, color="red") +
+  scale_x_continuous(breaks = seq(0, 40, by=2)) +
+  theme_bw()
+```
+
+I would choose a k between 7 and 8 because the MSE seems to be the lowest around there for most of the tests.
+:::
+
+## d. Evaluate actual performance
+
+Now we will see how well cross-validation performed. Simulate a test data set of $50000$ observations from the same distributions. Use `set.seed(223)` prior to generating the test data.
+
+-   Fit a set of kNN models, using the full training data, and calculate the mean squared error (MSE) on the test data for each model. Use the same $k$ values in *a*.
+-   Report the optimal $k$, the corresponding *edf*, and MSE based on the test set.
+
+::: {.callout-note title="Solution"}
+```{r}
+set.seed(223)
+n=50000
+x = x_vals(n)
+y = y_vals(x)
+data_test = tibble(x=x, y=y)
+```
+
+```{r}
+k = seq(3,40,1)
+RESULTS2 = map_df(k, knn_eval, data_train = data_train, data_test = data_test)
+RESULTS2
+```
+
+```{r}
+#: Plot Results
+RESULTS2 %>%
+  # make long:
+  pivot_longer(starts_with("mse"), names_to="data", values_to="mse") %>%
+  # remove 'mse.' from values:
+  mutate(data = str_remove(data, "mse\\.")) %>%
+  # plot:
+  ggplot(aes(edf, mse, color=data))+
+  geom_line()+ 
+  geom_point()+
+  labs(title="kNN Regression", x='edf (n/k)', y="MSE")+
+  scale_x_continuous(breaks=seq(2, 30, by=2))+
+  theme_bw()
+```
+
+```{r}
+RESULTS2 %>%
+  filter(mse.test==min(mse.test))
+```
+
+The model with the optimal MSE (the lowest MSE: 7.11) has a k value of 13 and an edf of around 7.69.
+:::
+
+## e. Performance plots
+
+Plot both the cross-validation estimated and (true) error calculated from the test data on the same plot. See Figure 5.6 in ISL (pg 182) as a guide.
+
+-   Produce two plots: one with $k$ on the x-axis and one with *edf* on the x-axis.
+-   Each plot should have two lines: one from part *a* and one from part *d*
+
+::: {.callout-note title="Solution"}
+```{r}
+ggplot()+
+  geom_line(data = RESULTS %>% group_by(k) %>% summarize(mse.test = mean(mse.test)),
+            aes(k, mse.test),
+            color="darkblue")+
+  geom_point(data = RESULTS %>% group_by(k) %>% summarize(mse.test = mean(mse.test)) %>%
+               slice_min(mse.test, n=1), aes(k, mse.test), size=3, color="red")+
+  geom_line(data = RESULTS2, aes(k, mse.test), color="orange", linetype="longdash")+
+  geom_point(data = RESULTS2 %>% filter(mse.test==min(mse.test)), aes(k, mse.test), size=3, color="red")+
+  scale_x_continuous(breaks=seq(2, 40, by=2))+
+  annotate ("text",x = 35,y = 7,label = "Orange: True Error\n Blue: CV Error")+
+  theme_bw()
+```
+
+```{r}
+ggplot()+
+  geom_line(data = RESULTS %>% group_by(edf) %>% summarize(mse.test = mean(mse.test)),
+            aes(edf, mse.test),
+            color="darkblue")+
+  geom_point(data = RESULTS %>% group_by(edf) %>% summarize(mse.test = mean(mse.test)) %>%
+               slice_min(mse.test, n=1), aes(edf, mse.test), size=3, color="red")+
+  geom_line(data = RESULTS2, aes(edf, mse.test), color="orange", linetype="longdash")+
+  geom_point(data = RESULTS2 %>% filter(mse.test==min(mse.test)), aes(edf, mse.test), size=3, color="red")+
+  scale_x_continuous(breaks=seq(2, 40, by=2))+
+  annotate ("text",x = 30,y = 7,label = "Orange: True Error\n Blue: CV Error")+
+  theme_bw()
+```
+:::
+
+## f. Did cross-validation work as intended?
+
+Based on the plots from *e*, does it appear that cross-validation worked as intended? How sensitive is the choice of $k$ on the resulting test MSE?
+
+::: {.callout-note title="Solution"}
+NO, it doesn't seem to have worked as intended. The CV seems to be really optimistic in MSE compared to the true MSE because the sample size is small. However, the choice of k on the true MSE is less sensitive than on the CV MSE because the differences between the MSE aren't that large (8 and 13 as opposed to 8 and 20 or something) and the MSE is larger for the true error than the CV error.
+:::
