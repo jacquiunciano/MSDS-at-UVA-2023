@@ -44,7 +44,7 @@ class Extraction():
             l.append("bold")
         return ", ".join(l)
 
-    def get_narrative(self, pdf_path):
+    def get_narrative(pdf_path):
         """
         Given a pdf path, extracts the narrative of one pdf into a string.
         """
@@ -307,9 +307,11 @@ class Extraction():
             file_data.append((self.source_path, self.destination_path, file_title))
 
         # creating df with the file title as the index and source path as a col
-        self.INFO = pd.DataFrame(file_data, columns=['source_path', 'destination_path','file_title'])\
+        INFO = pd.DataFrame(file_data, columns=['pdf_path', 'txt_path','file_title'])\
             .set_index('file_title').sort_index()
+        self.INFO = pd.concat([self.INFO, INFO])
         # attempt at dropping any duplicate files with same file name
         # this only works if same file has the SAME NAME
-        self.INFO = self.INFO[~self.INFO.index.duplicated(keep='first')]
+        self.INFO = self.INFO[~self.INFO.index.duplicated(keep='last')]
+        return self.INFO
     
