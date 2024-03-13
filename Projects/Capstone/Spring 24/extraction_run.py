@@ -14,6 +14,7 @@ class Extraction():
     INPUTS: 
     source_path    the path to the folder of PDFs
     destination_path    the path to the folder of TXTs
+    labels    a dataframe with the binary indicator (index: file_title, column: label)
     """
     source_path = ""
     destination_path = ""
@@ -23,7 +24,7 @@ class Extraction():
         self.source_path = source_path
         self.destination_path = destination_path
 
-    def flags_decomposer(flags):
+    def flags_decomposer(self, flags):
         """
         Make font flags human readable.
         """
@@ -44,7 +45,7 @@ class Extraction():
             l.append("bold")
         return ", ".join(l)
 
-    def get_narrative(pdf_path):
+    def get_narrative(self, pdf_path):
         """
         Given a pdf path, extracts the narrative of one pdf into a string.
         """
@@ -274,11 +275,14 @@ class Extraction():
         
         return narrative
 
-    def save_narrative_to_txt(self, narrative):
+    def save_narrative_to_txt(self, narrative, pdf_path):
         """
         Saving the string 'narrative' as a txt file to the destination path.
         """
-        with open(self.destination_path, 'w', encoding='utf-8') as txt_file:
+        base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+        txt_path = os.path.join(self.destination_path, f"{base_name}.txt")
+
+        with open(txt_path, 'w', encoding='utf-8') as txt_file:
             txt_file.write(narrative)
 
     def process_pdfs(self):
@@ -292,7 +296,7 @@ class Extraction():
             narrative = self.get_narrative(pdf_path)
             narratives.append(narrative)
             # Save narrative to text file in the same folder, overwriting existing files
-            self.save_narrative_to_txt(narrative)
+            self.save_narrative_to_txt(narrative, pdf_path)
 
     def create_info(self):
         """
@@ -303,7 +307,7 @@ class Extraction():
         file_data = []
         for each_file in file_list:
             # split might be different, recommend checking with INFO.sample() or .head()
-            file_title = each_file.split('\\')[-1]
+            file_title = each_file.split('\\')[-1].split(".txt")[0]
             file_data.append((self.source_path, self.destination_path, file_title))
 
         # creating df with the file title as the index and source path as a col
@@ -313,5 +317,10 @@ class Extraction():
         # attempt at dropping any duplicate files with same file name
         # this only works if same file has the SAME NAME
         self.INFO = self.INFO[~self.INFO.index.duplicated(keep='last')]
+        return self.INFO
+
+    def add_labels(self, labels):
+        # add the labels 
+        self.INFO = pd.concat([self.INFO, labels], axis=1, join="inner")
         return self.INFO
     
