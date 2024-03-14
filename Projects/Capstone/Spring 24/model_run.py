@@ -44,20 +44,22 @@ class Model():
         """
 
         # initiate list of dictionaries
-        narratives_list = []
-        for doc_idx, txt_path in enumerate(self.INFO['txt_path']):
-            base_name = self.INFO.index[doc_idx]
-            txt_path = os.path.join(self.INFO['txt_path'][doc_idx], f"{base_name}.txt")
+        # narratives_list = []
+        # for doc_idx, txt_path in enumerate(self.INFO['txt_path']):
+            # base_name = self.INFO.index[doc_idx]
+            # txt_path = os.path.join(self.INFO['txt_path'][doc_idx], f"{base_name}.txt")
             
-            with open(txt_path, 'r',  encoding='utf-8') as file:
-                narrative = file.read()
-            narratives_list.append({"title": self.INFO.index[doc_idx], "narrative": narrative})
+            # with open(txt_path, 'r',  encoding='utf-8') as file:
+                # narrative = file.read()
+            # narratives_list.append({"title": self.INFO.index[doc_idx], "narrative": narrative})
 
         # Convert the list of dictionaries to a DataFrame
-        narratives = pd.DataFrame(narratives_list)
-        narratives = narratives.reset_index().set_index("title")
-        narratives = narratives.drop(columns=['index'])
+        # narratives = pd.DataFrame(narratives_list)
+        # narratives = narratives.reset_index().set_index("title")
+        # narratives = narratives.drop(columns=['index'])
 
+        narratives = self.INFO.drop(columns=['pdf_path','txt_path'])
+        
         # make a new df with same index as narratives df
         df = pd.DataFrame(index=narratives.index)
         # tokenize by sentence level for narratives for each document

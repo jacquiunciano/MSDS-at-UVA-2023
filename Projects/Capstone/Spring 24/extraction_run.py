@@ -308,10 +308,12 @@ class Extraction():
         for each_file in file_list:
             # split might be different, recommend checking with INFO.sample() or .head()
             file_title = each_file.split('\\')[-1].split(".txt")[0]
-            file_data.append((self.source_path, self.destination_path, file_title))
+            with open(each_file, 'r',  encoding='utf-8') as file:
+                narrative = file.read()
+            file_data.append((self.source_path, self.destination_path, file_title, narrative))
 
         # creating df with the file title as the index and source path as a col
-        INFO = pd.DataFrame(file_data, columns=['pdf_path', 'txt_path','file_title'])\
+        INFO = pd.DataFrame(file_data, columns=['pdf_path', 'txt_path','file_title', 'narrative'])\
             .set_index('file_title').sort_index()
         self.INFO = pd.concat([self.INFO, INFO])
         # attempt at dropping any duplicate files with same file name
