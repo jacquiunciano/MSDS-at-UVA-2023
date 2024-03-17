@@ -318,11 +318,11 @@ class Extraction():
         self.INFO = pd.concat([self.INFO, INFO])
         # attempt at dropping any duplicate files with same file name
         # this only works if same file has the SAME NAME
-        self.INFO = self.INFO[~self.INFO.index.duplicated(keep='last')]
+        self.INFO = self.INFO[~self.INFO.narrative.duplicated(keep='last')]
         return self.INFO
 
     def add_labels(self, labels):
         # add the labels 
-        self.INFO = pd.concat([self.INFO, labels], axis=1, join="inner")
+        self.INFO = pd.concat([self.INFO, labels], axis=1, join="outer")
         return self.INFO
     
