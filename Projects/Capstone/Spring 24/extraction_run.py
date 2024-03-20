@@ -324,6 +324,6 @@ class Extraction():
     def add_labels(self, labels):
         # add the labels
         labels.index = labels.index.str.replace("'", "_")
-        self.INFO = pd.concat([self.INFO, labels], axis=1, join="outer")
+        self.INFO = pd.concat([self.INFO, labels], axis=1, join="inner")
         return self.INFO
     

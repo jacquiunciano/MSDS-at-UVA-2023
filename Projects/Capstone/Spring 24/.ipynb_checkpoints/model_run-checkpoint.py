@@ -8,6 +8,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import model_selection, svm
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV
 
 class Model():
     """
@@ -19,6 +20,10 @@ class Model():
 
     INFO = pd.DataFrame()
     CORPUS = pd.DataFrame()
+    train_X = []
+    train_Y = []
+    test_X = []
+    test_Y = []
     
     def __init__(self, INFO, overwrite=True):
         """
@@ -87,7 +92,7 @@ class Model():
 
         return self.CORPUS
 
-    def gather_docs(self, CORPUS, ohco_level, term_col='term_str'):
+    def gather_docs(self, CORPUS, ohco_level=1, term_col='term_str'):
         OHCO = self.CORPUS.index.names
         CORPUS = self.CORPUS
         CORPUS[term_col] = CORPUS[term_col].astype('str')
@@ -95,19 +100,45 @@ class Model():
         DOC['n_tokens'] = DOC.doc_str.apply(lambda x: len(x.split()))
         return DOC
 
-    def setup_model(self, ngram_range, n_terms, ohco_level=1, split=0.2, lang='english', norm='l2', idf=True):
-        DOC = self.gather_docs(self.CORPUS, ohco_level)
+    def vec_engine(self, ngram_range, ohco_level=1, split=0.2, lang='english', norm='l2', idf=True):
+        DOC = self.gather_docs(self.CORPUS, ohco_level=ohco_level)
 
-        train_X, test_X, train_Y, test_Y = model_selection.train_test_split(DOC.doc_str, self.INFO.labels, test_size=split)
+        train_X, test_X, self.train_Y, self.test_Y = model_selection.train_test_split(DOC.doc_str, self.INFO.label, test_size=split)
         
         # vectorize documents
         tfidf_engine = TfidfVectorizer(
             stop_words = lang,
             ngram_range = ngram_range,
-            max_features = n_terms,
             norm = norm, 
             use_idf = idf)
         
-        X = tfidf_engine.fit_transform(DOC.doc_str)
+        self.train_X = tfidf_engine.fit_transform(train_X)
+        self.test_X = tfidf_engine.transform(test_X)
+
+    def log_class_train(self):
+        # Initialize a logistic regression classifier
+        classifier = LogisticRegression()
+
+        # Define hyperparameters to tune
+        params = {'C': [0.1, 1, 10], 'penalty': ['l2']}
+
+        # Perform grid search for hyperparameter tuning
+        grid_search = GridSearchCV(classifier, params, cv=5)
+        grid_search.fit(self.train_X, self.train_Y)
+
+        # Get the best classifier from grid search
+        best_classifier = grid_search.best_estimator_
+
+        # Train the best classifier on the entire training set
+        best_classifier.fit(self.train_X, self.train_Y)
+
+        # Make predictions on the test set
+        y_pred = best_classifier.predict(self.test_X)
+
+        # Evaluate the accuracy of the classifier
+        accuracy = accuracy_score(self.test_Y, y_pred)
+        return print("Accuracy after tuning:", accuracy)
+
+
 
         
