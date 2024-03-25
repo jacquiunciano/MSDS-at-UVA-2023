@@ -12,32 +12,34 @@ from sklearn.model_selection import GridSearchCV
 
 class Model():
     """
-    Takes in an INFO DataFrame that contains AT LEAST the following information: document titles (index) and the path to the txt file (labeled as txt_path) and document label (columns). For best results, use the extraction_run.py file and run create_info() and add_labels() to generate an INFO DataFrame for current use. Or for future use, save that DataFrame as a CSV file, and when needed, open the CSV as a DataFrame for this file.
+    Takes in an INFO DataFrame that contains AT LEAST the following information: document titles (index) and document label (columns). For best results, use the extraction_run.py file and run create_info() and add_labels() to generate an INFO DataFrame for current use. Or for future use, save that DataFrame as a CSV file, and when needed, open the CSV as a DataFrame for this file.
     
     Performs the following operations on the INFO DataFrame:
     1. Creates a CORPUS with the following information: document titles, sentence number, token number (index) and the token str, term str, and POS tag (defined by NLTK) (columns). 
     """
 
-    INFO = pd.DataFrame()
-    CORPUS = pd.DataFrame()
+    test_df = pd.DataFrame()
+    train_df = pd.DataFrame()
     train_X = []
     train_Y = []
     test_X = []
     test_Y = []
     
-    def __init__(self, INFO, overwrite=True):
+    def __init__(self, test_df, train_df, overwrite=True):
         """
         Intializes INFO DataFrame. If overwrite=True, clears previous data (can start fresh with a new INFO DataFrame).
         If overwrite=False, concats old INFO DataFrame and new INFO DataFrame.
         """
         if overwrite==True:
-            self.INFO = INFO
+            self.train_df = train_df
+            self.test_df = test_df
         else:
-            self.INFO = pd.concat([self.INFO, INFO])
+            self.train_df = pd.concat([self.train_df, train_df])
+            self.test_df = pd.concat([self.test_df, test_df])
 
     def vec_engine(self, ngram_range, split=0.2, lang='english', norm='l2', idf=True):
 
-        train_X, test_X, self.train_Y, self.test_Y = model_selection.train_test_split(self.INFO.narrative, self.INFO.label, test_size=split)
+        train_X, test_X, self.train_Y, self.test_Y = self.train_df.narrative, self.test_df.narrative, self.train_df.label,  self.test_df.label
         
         # vectorize documents
         tfidf_engine = TfidfVectorizer(
